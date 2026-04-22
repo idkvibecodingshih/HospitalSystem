@@ -12,15 +12,40 @@ class AIClient:
     def __init__(self):
         self.client = OpenAI(
             base_url="https://api.groq.com/openai/v1",
-            api_key=os.getenv("GROQ_API_KEY")  # 🔐 nunca deixar key no código
+            api_key=os.getenv("GROQ_API_KEY")
         )
 
-    def chat(self, message: str) -> str:
+    def analyze_patient(self, patient: dict) -> dict:
+        prompt = f"""
+Analyze this hospital patient:
+
+Name: {patient['full_name']}
+Age: {patient['age']}
+Diagnosis: {patient['diagnosis']}
+Department: {patient['department']}
+
+Return:
+- short_summary (1 sentence)
+- severity (low, medium, high)
+- recommendation (short)
+
+Respond in JSON format.
+"""
+
         response = self.client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": message}]
+            temperature=0,
+            messages=[{"role": "user", "content": prompt}]
         )
-        return response.choices[0].message.content
+
+        content = response.choices[0].message.content
+
+        # fallback simples (caso IA não retorne JSON perfeito)
+        return {
+            "ai_summary": content,
+            "ai_severity": "unknown",
+            "ai_recommendation": "N/A"
+        }
 
 
 # =========================
@@ -31,21 +56,16 @@ class Hospital:
     def __init__(self, manager: str):
         self.manager = manager
         self.patients = []
+        self.ai = AIClient()
         self.running = True
 
-        self.print_header("Hospital System v2.1")
+        self.print_header("Hospital System v2.2 (AI Enhanced)")
         self.main_menu()
-
-
-
 
     def print_header(self, text: str):
         print("=" * 50)
-        print(f"{text.center(50)}")
+        print(text.center(50))
         print("=" * 50)
-
-
-
 
     def main_menu(self):
         options = {
@@ -69,19 +89,15 @@ class Hospital:
                 print("Exiting system...")
                 self.running = False
 
-
-
     def get_choice(self, valid_choices):
         while True:
             try:
                 choice = int(input("\nSelect an option: ").strip())
                 if choice in valid_choices:
                     return choice
-                print("Invalid option. Try again.")
+                print("Invalid option.")
             except ValueError:
-                print("Please enter a valid number.")
-
-
+                print("Enter a valid number.")
 
     def register_patients(self):
         time.sleep(0.5)
@@ -108,6 +124,12 @@ class Hospital:
                 "status": input("Status: ").strip().capitalize()
             }
 
+            print("\n[AI] Analyzing patient...")
+            ai_data = self.ai.analyze_patient(patient)
+
+            # junta IA com dados
+            patient.update(ai_data)
+
             self.patients.append(patient)
 
         self.save_to_csv()
@@ -124,12 +146,12 @@ class Hospital:
 
         df.to_csv(
             "hospital_records.csv",
-            sep=";",                # 🇧🇷 Excel friendly
+            sep=";",
             index=False,
-            encoding="utf-8-sig"    # evita bug de acento
+            encoding="utf-8-sig"
         )
 
-        print("\n✔ Data saved to hospital_records.csv")
+        print("\n✔ Data saved with AI insights")
 
 
 # =========================
@@ -137,4 +159,4 @@ class Hospital:
 # =========================
 
 if __name__ == "__main__":
-    hospital = Hospital("Bernardo")
+    Hospital("Bernardo")
